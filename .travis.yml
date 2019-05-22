@@ -1,0 +1,21 @@
+dist: xenial
+language: cpp
+
+before_script:
+    # Rewrite /etc/apt/soures.list for C++17
+  - sudo echo "deb http://archive.ubuntu.com/ubuntu/ bionic main" > /etc/apt/sources.list
+  - sudo echo "deb http://archive.ubuntu.com/ubuntu/ bionic-updates main" >> /etc/apt/sources.list
+
+  - sudo apt update
+  - sudo apt-get install g++ cmake libboost-system-dev -y
+
+script:
+  - cmake .
+  - cmake --build .
+  - cmake --build . --target package
+
+deploy:
+  - provider: script
+    skip_cleanup: true
+    script:
+      - curl -T join_server-1.0.$TRAVIS_BUILD_NUMBER.deb -uansochnev:$BINTRAY_API_KEY "https://api.bintray.com/content/ansochnev/otus-cpp/join_server/$TRAVIS_BUILD_NUMBER/pool/main/h13/join_server-1.0.$TRAVIS_BUILD_NUMBER.deb;deb_distribution=homework;deb_component=main;deb_architecture=amd64;publish=1"
