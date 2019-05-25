@@ -10,7 +10,7 @@ find_package(Threads)
 find_package(Boost COMPONENTS system REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
-add_executable(join_server server.cpp)
+add_executable(join_server main.cpp server.cpp)
 
 set_target_properties(join_server PROPERTIES
     CXX_STANDARD 17

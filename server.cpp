@@ -1,106 +1,109 @@
-#include <iostream>
-#include <memory>
-#include <boost/asio.hpp>
+#include "protocol.h"
+#include <sstream>
 
-
-class Session : public std::enable_shared_from_this<Session>
+class Session : public std::enable_shared_from_this<Session>,
+                public proto::IResponseWriter
 {
     boost::asio::ip::tcp::socket m_socket;
     char m_buf[1024];
 
-public:
-    Session(boost::asio::ip::tcp::socket sock) : m_socket(std::move(sock)) {}
+    proto::IHandler *m_handler;
 
-    ~Session() 
-    {
+    std::ostringstream m_response;
+    std::string        m_responseStatus;
+
+public:
+    Session(boost::asio::ip::tcp::socket sock, proto::IHandler* handler) 
+        : m_socket(std::move(sock)), m_handler(handler) {}
+
+    ~Session() {
         m_socket.close();
     }
 
-    void start() 
-    {
-        do_read();
+    void start() {
+        recv();
+    }
+
+    void writeError(const std::string& message) override {
+        m_responseStatus = "ERR " + message;
+    }
+
+    void write(const std::string& data) override {
+        m_response << data;
     }
 
 private:
-    void do_read()
+    void recv()
     {
         auto self(shared_from_this());
-        m_socket.async_read_some(boost::asio::buffer(m_buf),
+        m_socket.async_read_some(boost::asio::buffer(m_buf, 1024),
             [this, self](const boost::system::error_code& err, std::size_t n)
             {
                 if (!err) {
-                    do_write(n);
+                    m_response.str("");
+                    m_responseStatus = "OK";
+                    
+                    proto::Request req{std::string(m_buf, n)};
+                    m_handler->handle(this, req);
+
+                    if (!m_response.str().empty() && 
+                        m_response.str().back() != '\n') 
+                    {
+                        m_response << '\n';
+                    }
+                    m_response << m_responseStatus << std::endl;
+
+                    send(m_response.str());
                 }
-            });
+        });
     }
 
-    void do_write(std::size_t length)
-    {
+    void send(std::string&& s)
+    {   
         auto self(shared_from_this());
-        boost::asio::async_write(m_socket, boost::asio::buffer(m_buf, length),
+        boost::asio::async_write(m_socket, boost::asio::buffer(s),
             [this, self](boost::system::error_code err, std::size_t /*length*/)
             {
                 if (!err) {
-                    do_read();
+                    recv();
                 }
-            });
-    }
-
-};
-
-class Server
-{
-    boost::asio::ip::tcp::acceptor m_acceptor;
-    boost::asio::ip::tcp::socket   m_socket;
-
-public:
-    Server(boost::asio::io_service& service, short port) 
-        : 
-        m_acceptor(service, 
-                     boost::asio::ip::tcp::endpoint(
-                         boost::asio::ip::tcp::v4(), port)), 
-        m_socket(service)
-    {
-        do_accept();
-    }
-
-    ~Server()
-    {
-        m_socket.close();
-    }
-
-private:
-    void do_accept()
-    {
-        m_acceptor.async_accept(m_socket, 
-            [this](const boost::system::error_code& err) 
-            {
-                if (err) {
-                    return;
-                }
-                std::make_shared<Session>(std::move(m_socket))->start();
-                this->do_accept();
             });
     }
 };
 
-int main(int argc, char* argv[]) 
+
+proto::Server::Server(short port, proto::IHandler* handler) 
+    : 
+    m_service(boost::asio::io_service()),
+    m_acceptor(m_service, 
+                    boost::asio::ip::tcp::endpoint(
+                        boost::asio::ip::tcp::v4(), port)), 
+    m_socket(m_service),
+    m_handler(handler)
 {
-    if (argc != 2) {
-        std::cout << "too few arguments" << std::endl;
-        return 1;
-    }
+}
 
-    try {
-        int port = std::stoi(argv[1]);
+proto::Server::~Server() 
+{
+    m_socket.close();
+    delete m_handler;
+}
 
-        boost::asio::io_service service;
-        Server server(service, port);
-        service.run();
-    }
-    catch(std::exception& e) {
-        std::cout << e.what();
-    }
+void proto::Server::run() 
+{
+    do_accept();
+    m_service.run();
+}
 
-    return 0;
+void proto::Server::do_accept()
+{
+    m_acceptor.async_accept(m_socket, 
+        [this](const boost::system::error_code& err) 
+        {
+            if (err) {
+                return;
+            }
+            std::make_shared<Session>(std::move(m_socket), m_handler)->start();
+            this->do_accept();
+        });
 }
