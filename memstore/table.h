@@ -1,38 +1,7 @@
 #include <vector>
 #include <variant>
 #include "schema.h"
-
-class DataObject
-{
-    sql::DataType  m_type;
-    void          *m_value;
-
-public:
-    explicit DataObject(sql::DataType t);
-    explicit DataObject(long val);
-    explicit DataObject(const std::string& val); 
-    explicit DataObject(std::string&& val);
-
-    DataObject(const DataObject& other);
-    DataObject(DataObject&& other);
-        
-    ~DataObject();
-
-    DataObject& operator= (const DataObject& rhs);
-    DataObject& operator= (DataObject&& rhs);
-
-    sql::DataType type() const noexcept {
-        return m_type;
-    }
-    
-    bool isNull() const noexcept { 
-        return m_value == nullptr;
-    }
-    
-    long getLong() const;
-    std::string getString() const;
-};
-
+#include "data_object.h"
 
 class Table
 {
@@ -40,7 +9,7 @@ class Table
     class Row;
     class Iterator;
 
-    Schema                        m_schema;
+    Schema                         m_schema;
     std::vector<std::vector<Cell>> m_rows;
 
 public:
@@ -62,7 +31,6 @@ public:
 private:
     class Cell
     {
-        std::variant<long, std::string> value;
     public:
         Cell& operator= (long n);
         Cell& operator= (const std::string& s);
@@ -70,9 +38,10 @@ private:
 
         Cell& operator= (const DataObject& d);
         
-        long getLong() const { return std::get<long>(value); }
-        const std::string& getString() const { return std::get<std::string>(value); }
+        long getLong() const;
+        const std::string& getString() const;
     };
+
 
     class Row
     {

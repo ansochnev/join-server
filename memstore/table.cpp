@@ -1,29 +1,6 @@
 #include "memstore.h"
 #include "table.h"
 
-DataObject::DataObject(sql::DataType t) 
-        : m_type(t), m_value(nullptr) {}
-
-DataObject::DataObject(long val) 
-    : m_type(sql::DataType::INTEGER), m_value(new long(val)) {}
-
-DataObject::DataObject(const std::string& val) 
-    : m_type(sql::DataType::TEXT), m_value(new std::string(val)) {}
-
-DataObject::DataObject(const DataObject& other) 
-    : m_type(other.m_type), m_value(nullptr) 
-{ 
-    *this = other; 
-}
-
-DataObject::DataObject(DataObject&& other) 
-    : m_type(other.m_type), m_value(other.m_value) 
-{
-    other.m_value = nullptr;
-}
-    
-DataObject::~DataObject() {}
-
 
 Table::Table(const Schema& s) : m_schema(s) {}
 Table::Table(Schema&& s)      : m_schema(std::move(s)) {}
