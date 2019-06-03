@@ -2,7 +2,9 @@
 #include <memory>
 
 #include "protocol.h"
-#include "handler.h"
+#include "joiner.h"
+#include "memstore/memstore.h"
+
 
 int main(int argc, char* argv[]) 
 {
@@ -11,9 +13,11 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    sql::IDBConnection *db = mem::open();
+
     try {
         int port = std::stoi(argv[1]);
-        proto::Server server(port, new Handler());
+        proto::Server server(port, new Joiner(db));
         server.run();
     }
     catch(std::exception& e) {
