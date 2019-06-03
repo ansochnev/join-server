@@ -19,6 +19,7 @@ union U
     std::string s;
 };
 
+
 int main()
 {
     Schema schema;
@@ -34,5 +35,4 @@ int main()
     std::cout << sizeof(sql::DataType) << std::endl;
     std::cout << sizeof(std::unique_ptr<void>) << std::endl;
     std::cout << sizeof(std::string) << std::endl;
-    std::cout << sizeof(U) << std::endl;
 }
