@@ -35,4 +35,19 @@ int main()
     std::cout << sizeof(sql::DataType) << std::endl;
     std::cout << sizeof(std::unique_ptr<void>) << std::endl;
     std::cout << sizeof(std::string) << std::endl;
+
+    Table table(schema);
+
+    std::vector<DataObject> values;
+    values.push_back(DataObject(28));
+    values.push_back(DataObject("anton"));
+
+    DataObject d("string");
+    DataObject d2(sql::DataType::TEXT);
+    d2 = d;
+
+    table.insert(std::move(values));
+    for (auto row : table) {
+        std::cout << "hello" << std::endl;
+    }
 }

@@ -28,4 +28,5 @@ std::size_t Schema::primaryKeyIndex() const
             return i;
         }
     }
+    throw sql::Exception("Schema: primary key not found");
 }
