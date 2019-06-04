@@ -25,56 +25,18 @@ class DataObject
 public:
     DataObject() = delete; 
 
-    explicit DataObject(sql::DataType t) 
-        : m_type(t), m_null(true) {}
-    
-    explicit DataObject(long n) 
-        : m_type(sql::DataType::INTEGER), m_null(false) { m_value.num = n; }
+    explicit DataObject(sql::DataType t);
+    explicit DataObject(long n); 
+    explicit DataObject(const std::string& s); 
+    explicit DataObject(std::string&& s);
 
-    explicit DataObject(const std::string& s) 
-        : m_type(sql::DataType::TEXT), m_null(false) 
-    { 
-        new (&m_value.str) std::string(s); 
-    }
-
-    explicit DataObject(std::string&& s)
-        : m_type(sql::DataType::TEXT), m_null(false) 
-    { 
-        new (&m_value.str) std::string(std::move(s));
-    }
-
-    DataObject(const DataObject& other) 
-    {
-        if (m_type == sql::DataType::TEXT)
-            new (&m_value.str) std::string(other.m_value.str);
-    }
-
-    DataObject(DataObject&& other) 
-    {
-        if (m_type == sql::DataType::INTEGER)
-            new (&m_value.str) std::string(std::move(m_value.str));
-    }
+    DataObject(const DataObject& other);
+    DataObject(DataObject&& other);
         
-    ~DataObject() 
-    { 
-        if (m_type == sql::DataType::TEXT) 
-            m_value.str.~basic_string();
-    }
+    ~DataObject();
 
-    DataObject& operator= (const DataObject& rhs) 
-    {
-        if (m_type == sql::DataType::TEXT) {
-            m_value.str = rhs.m_value.str;
-        }
-        return *this;
-    }
-    DataObject& operator= (DataObject&& rhs) 
-    {
-        if (m_type == sql::DataType::TEXT) {
-            m_value.str = std::move(rhs.m_value.str);
-        }
-        return *this;
-    }
+    DataObject& operator= (const DataObject& rhs);
+    DataObject& operator= (DataObject&& rhs); 
 
     sql::DataType type() const noexcept { return m_type; }
     bool isNull() const noexcept        { return m_null; }

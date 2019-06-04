@@ -1,23 +1,6 @@
 #include <iostream>
-#include <variant>
-#include <any>
-#include <memory>
 #include "schema.h"
 #include "table.h"
-
-class Any
-{
-    void* m_data;
-    sql::DataType type;
-
-public:
-};
-
-
-union U
-{
-    std::string s;
-};
 
 
 int main()
@@ -25,29 +8,34 @@ int main()
     Schema schema;
     schema.addColumn(ColumnInfo("id", sql::DataType::INTEGER, true));
     schema.addColumn(ColumnInfo("name", sql::DataType::TEXT, false));
+/*
+    DataObject d1(sql::DataType::TEXT);
+    DataObject d2(28);
+    DataObject d3("string");
 
-    std::cout << sizeof(std::variant<int>) << std::endl;
-    std::cout << sizeof(std::variant<long>) << std::endl;
-    std::cout << sizeof(std::variant<std::string>) << std::endl;
-    std::cout << sizeof(std::variant<std::string, double>) << std::endl;
-    std::cout << sizeof(std::any) << std::endl;
-    std::cout << sizeof(Any) << std::endl;
-    std::cout << sizeof(sql::DataType) << std::endl;
-    std::cout << sizeof(std::unique_ptr<void>) << std::endl;
-    std::cout << sizeof(std::string) << std::endl;
+    std::string s = "str";
+    DataObject d4(s);
 
+    DataObject d5(d2);
+    DataObject d6(DataObject("hello"));
+
+    std::cout << d6.getString() << std::endl;
+
+    DataObject d7(sql::DataType::TEXT);
+*/
     Table table(schema);
 
     std::vector<DataObject> values;
     values.push_back(DataObject(28));
-    values.push_back(DataObject("anton"));
-
-    DataObject d("string");
-    DataObject d2(sql::DataType::TEXT);
-    d2 = d;
-
+    values.push_back(DataObject("hello"));
     table.insert(std::move(values));
+
+    std::vector<DataObject> values2;
+    values2.push_back(DataObject(36));
+    values2.push_back(DataObject("world"));
+    table.insert(std::move(values2));
+
     for (auto row : table) {
-        std::cout << "hello" << std::endl;
+        std::cout << row.getLong(0) << " " << row.getString(1) << std::endl;
     }
 }

@@ -5,36 +5,66 @@ Table::Table(const Schema& s) : m_schema(s) {}
 Table::Table(Schema&& s)      : m_schema(std::move(s)) {}
 
 
-Table::RowID Table::insert(std::vector<DataObject>&& values)
+bool Table::isSatisfySchema(const std::vector<DataObject>& values)
+{
+    if (m_schema.size() != values.size()) {
+        return false;
+    }
+   
+    for (std::size_t i = 0; i < m_schema.size(); ++i) {
+        if (m_schema[i].type() != values[i].type()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+bool Table::isUnique(const std::vector<DataObject>& values)
 {
     std::size_t i = m_schema.primaryKeyIndex();
 
-    // Check whether the record with the same primary key exists.
     switch (m_schema[i].type())
     {
     case sql::DataType::INTEGER:
         for (auto& row : m_rows) {
             if (row[i].getLong() == values[i].getLong()) {
-                throw sql::Exception("duplicate");
+                return false;
             }
         }   
         break;
 
     case sql::DataType::TEXT:
         for (auto& row : m_rows) {
+            std::cout << row[i].getString() << " " << values[i].getString();
             if (row[i].getString() == values[i].getString()) {
-                throw sql::Exception("duplicate");
+                return false;
             }
         }   
         break;
     }
+    return true;
+}
 
+
+Table::RowID Table::insert(std::vector<DataObject>&& values)
+{
+    if (!isSatisfySchema(values)) {
+        throw sql::Exception("Table: mismatch schema");
+    }
+    
+    if (!isUnique(values)) {
+        throw sql::Exception("duplicate");
+    }
+    
     std::vector<Cell> row;
-    row.reserve(values.size());
+    row.resize(values.size());
 
-    for (std::size_t i = 0; i < values.size(); ++i)
+    for (std::size_t i = 0; i < values.size(); ++i) {
         row[i] = values[i];
+    }
 
+    m_rows.push_back(std::move(row));
     return m_rows.size() - 1;
 }
 

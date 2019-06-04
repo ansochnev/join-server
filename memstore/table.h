@@ -26,10 +26,12 @@ public:
     Row operator[] (RowID r) { return Row(this, r); }
 
     using iterator = Iterator;
-    iterator begin() { 
-        std::cout << m_rows.empty() << std::endl;
-        return !m_rows.empty() ? Iterator(this, 0) : end(); }
+    iterator begin() { return !m_rows.empty() ? Iterator(this, 0) : end(); }
     iterator end()   { return Iterator(this, -1); }
+
+private:
+    bool isSatisfySchema(const std::vector<DataObject>& row);
+    bool isUnique(const std::vector<DataObject>& row);
 
 private:
     class Cell
@@ -39,10 +41,11 @@ private:
         };
 
         template<typename T>
-        struct Holder : public AbstractHolder {
+        struct Holder : public AbstractHolder 
+        {
             T value;
-            Holder(const T& t) : value(t) {}
-            Holder(T&& t)      : value(std::move(t)) {}
+            explicit Holder(const T& t) : value(t) {}
+            explicit Holder(T&& t)      : value(std::move(t)) {}
         };
 
         template<typename T>
@@ -54,16 +57,6 @@ private:
 
     public:
         Cell() : m_holder(nullptr) {}
-/*
-        explicit Cell(long n) 
-            : m_holder(new Holder<long>(std::move(n))) {}
-        
-        explicit Cell(std::string&& s)
-            : m_holder(new Holder<std::string>(std::move(s))) {}
-        
-        explicit Cell(const DataObject& d)
-            : m_holder(nullptr) { *this = d; }
-*/
         Cell(const Cell&) = delete;
         Cell(Cell&& other) 
             : m_holder(other.m_holder) { other.m_holder = nullptr; }
@@ -116,9 +109,7 @@ private:
         Table* m_table;
         RowID  m_row;
     public:
-        Iterator(Table* table, RowID row) : m_table(table), m_row(row) {
-            std::cout << row << std::endl;
-        }
+        Iterator(Table* table, RowID row) : m_table(table), m_row(row) {}
 
         Iterator(const Iterator&) = default;
         Iterator(Iterator&&)      = default;
@@ -133,7 +124,14 @@ private:
                    m_row   != rhs.m_row; 
         }
 
-        Iterator& operator++ () { return (++m_row, *this);    }
+        Iterator& operator++ () 
+        {
+            if (++m_row == m_table->m_rows.size()) {
+                m_row = -1;
+            }
+            return *this;
+        }
+        
         Row       operator*  () { return Row(m_table, m_row); }
     };
 };
