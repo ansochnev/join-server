@@ -70,7 +70,7 @@ DataObject parseValue(const std::string& s, const ColumnInfo& column)
         }
     }
     else if (column.type() == sql::DataType::TEXT) {
-        return DataObject(s);
+        return DataObject(trim(s, "\""));
     }
     else {
         throw sql::Exception("parseValue: unreachable code");

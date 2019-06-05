@@ -10,12 +10,12 @@ class DataObject
         std::string str;
         
         Value() {}
-        Value(const DataObject& d) {}
-        Value(DataObject&& d) {}
+        Value(const DataObject&) {}
+        Value(DataObject&&) {}
         ~Value() {}
 
-        void operator= (const Value& rhs) {}
-        void operator= (Value&& rhs) {}
+        void operator= (const Value&) {}
+        void operator= (Value&&) {}
     };
 
     sql::DataType m_type;
@@ -44,3 +44,6 @@ public:
     long getLong() const                 { return m_value.num; }
     const std::string& getString() const { return m_value.str; }
 };
+
+
+using Record = std::vector<DataObject>;

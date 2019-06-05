@@ -1,6 +1,5 @@
 #include <string>
 #include "memstore.h"
-#include "schema.h"
 #include "db.h"
 
 void assertEq(const std::string& have, const std::string& expect);

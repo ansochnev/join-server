@@ -1,6 +1,45 @@
+#ifndef TABLE_H
+#define TABLE_H
+
 #include <vector>
-#include "schema.h"
 #include "data_object.h"
+
+class ColumnInfo 
+{
+    std::string   m_name;
+    sql::DataType m_type;
+    bool          m_pkey;
+
+public:
+    ColumnInfo(const std::string& name, sql::DataType t, bool primaryKey) 
+        : m_name(name), m_type(t), m_pkey(primaryKey) {}
+
+    sql::DataType type() const      { return m_type; }
+    const std::string& name() const { return m_name; }
+    bool isPrimaryKey() const       { return m_pkey; }
+};
+
+
+class Schema
+{
+    std::vector<ColumnInfo> m_columns;
+
+public:
+    Schema() = default;
+
+    std::size_t addColumn(const ColumnInfo& ci);
+    std::size_t primaryKeyIndex() const;
+
+    const ColumnInfo& operator[] (int index) const { return m_columns[index]; }
+    const ColumnInfo& operator[] (const std::string& name) const;
+
+    std::size_t size() const { return m_columns.size(); }
+
+    using const_iterator = std::vector<ColumnInfo>::const_iterator;
+    const_iterator begin() const noexcept { return m_columns.cbegin(); }
+    const_iterator end()   const noexcept { return m_columns.cend();   }
+};
+
 
 class Table
 {
@@ -20,7 +59,8 @@ public:
     const Schema& schema() const noexcept { return m_schema; }
 
     using RowID = std::size_t;
-    RowID insert(std::vector<DataObject>&& values);
+    RowID insert(Record&& values);
+    std::vector<Record> select(const std::vector<RowID>& rows) const;
     void  remove(RowID row);
 
     Row operator[] (RowID r) { return Row(this, r); }
@@ -30,8 +70,9 @@ public:
     iterator end()   { return Iterator(this, -1); }
 
 private:
-    bool isSatisfySchema(const std::vector<DataObject>& row);
-    bool isUnique(const std::vector<DataObject>& row);
+    bool isSatisfySchema(const std::vector<DataObject>& row) const;
+    bool isUnique(const std::vector<DataObject>& row) const;
+    Record makeRecord(RowID row) const;
 
 private:
     class Cell
@@ -74,6 +115,7 @@ private:
         bool isNull() const                  { return m_holder == nullptr; }
         long getLong() const                 { return cast<long>();        }
         const std::string& getString() const { return cast<std::string>(); }
+        DataObject toDataObject(sql::DataType) const;
     };
 
 
@@ -119,6 +161,11 @@ private:
         Iterator& operator= (const Iterator&) = default;
         Iterator& operator= (Iterator&&)      = default;
 
+        bool operator== (const Iterator& rhs) const { 
+            return m_table == rhs.m_table && 
+                   m_row   == rhs.m_row; 
+        }
+                
         bool operator!= (const Iterator& rhs) const { 
             return m_table != rhs.m_table || 
                    m_row   != rhs.m_row; 
@@ -135,3 +182,5 @@ private:
         Row       operator*  () { return Row(m_table, m_row); }
     };
 };
+
+#endif // TABLE_H

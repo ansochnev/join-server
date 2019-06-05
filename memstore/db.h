@@ -5,20 +5,31 @@
 #include <vector>
 #include <map>
 
-#include "memstore.h"
-#include "schema.h"
+#include "table.h"
 
-
-class Selection : public sql::ISelection
+class FullTableSelection : public sql::ISelection
 {
-    
+    Table::iterator m_currentRow;
+    Table::iterator m_end;
 public:
-    bool hasNext() override;
-    void next() override;
+    FullTableSelection(const Table::iterator& begin, 
+                       const Table::iterator& end)
+        : m_currentRow(begin), m_end(end) {}
+
+    void next() override { ++m_currentRow; }
+    bool end()  override { return m_currentRow == m_end; }
     
-    bool isNull(std::size_t columnIndex) override;
-    long getLong(std::size_t columIndex) override;
-    std::string getString(std::size_t columnIndex) override;
+    bool isNull(std::size_t columnIndex) override {
+        return (*m_currentRow).isNull(columnIndex);
+    }
+
+    long getLong(std::size_t columnIndex) override {
+        return (*m_currentRow).getLong(columnIndex);
+    }
+
+    std::string getString(std::size_t columnIndex) override {
+        return (*m_currentRow).getString(columnIndex);
+    }
 };
 
 
@@ -43,7 +54,10 @@ public:
         m_tables[tableName]->insert(std::move(row));
     }
 
-    Selection selectAll(const std::string& tableName);
+    FullTableSelection* selectAll(const std::string& tableName) {
+        Table *tab = m_tables[tableName];
+        return new FullTableSelection(tab->begin(), tab->end());
+    }
 };
 
 #endif // MEM_DB_H

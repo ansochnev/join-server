@@ -44,6 +44,7 @@ class IStatement
 public:
     virtual void modify(const std::string& query) = 0;
     virtual ISelection* select(const std::string& query) = 0;
+    virtual void close() = 0;
     virtual ~IStatement() {}
 };
 
@@ -51,8 +52,8 @@ public:
 class ISelection
 {
 public:
-    virtual bool hasNext() = 0;
     virtual void next() = 0;
+    virtual bool end()  = 0;
     
     virtual bool isNull(std::size_t columnIndex) = 0;
     virtual long getLong(std::size_t columIndex) = 0;

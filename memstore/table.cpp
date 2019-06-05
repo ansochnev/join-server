@@ -1,11 +1,43 @@
 #include "memstore.h"
 #include "table.h"
 
+std::size_t Schema::addColumn(const ColumnInfo& ci)
+{
+    for (auto& col : m_columns) {
+        if (col.name() == ci.name()) {
+            throw sql::Exception("column " + col.name() + " already exists");
+        }
+    }
+    m_columns.push_back(ci);
+    return m_columns.size() - 1;
+}
+
+const ColumnInfo& Schema::operator[] (const std::string& name) const
+{
+    for (const ColumnInfo& col : *this) {
+        if (col.name() == name) {
+            return col;
+        }
+    }
+    throw sql::Exception("column " + name + " does not exist");
+}
+
+std::size_t Schema::primaryKeyIndex() const
+{
+    for (std::size_t i = 0; i < m_columns.size(); ++i) {
+        if (m_columns[i].isPrimaryKey()) {
+            return i;
+        }
+    }
+    throw sql::Exception("Schema: primary key not found");
+}
+
+
 Table::Table(const Schema& s) : m_schema(s) {}
 Table::Table(Schema&& s)      : m_schema(std::move(s)) {}
 
 
-bool Table::isSatisfySchema(const std::vector<DataObject>& values)
+bool Table::isSatisfySchema(const std::vector<DataObject>& values) const
 {
     if (m_schema.size() != values.size()) {
         return false;
@@ -20,7 +52,7 @@ bool Table::isSatisfySchema(const std::vector<DataObject>& values)
 }
 
 
-bool Table::isUnique(const std::vector<DataObject>& values)
+bool Table::isUnique(const std::vector<DataObject>& values) const
 {
     std::size_t i = m_schema.primaryKeyIndex();
 
@@ -47,7 +79,7 @@ bool Table::isUnique(const std::vector<DataObject>& values)
 }
 
 
-Table::RowID Table::insert(std::vector<DataObject>&& values)
+Table::RowID Table::insert(Record&& values)
 {
     if (!isSatisfySchema(values)) {
         throw sql::Exception("Table: mismatch schema");
@@ -69,9 +101,26 @@ Table::RowID Table::insert(std::vector<DataObject>&& values)
 }
 
 
-/*
-void  remove(RowID row);
-*/
+Record Table::makeRecord(RowID row) const
+{
+    Record record;
+    record.reserve(m_schema.size());
+    for (std::size_t i = 0; i < m_schema.size(); ++i) {
+        record.emplace_back(m_rows[row][i].toDataObject(m_schema[i].type()));
+    }
+    return record;
+}
+
+
+std::vector<Record> Table::select(const std::vector<RowID>& rows) const
+{
+    std::vector<Record> records;
+    records.reserve(rows.size());
+    for (RowID row : rows) {
+        records.push_back(makeRecord(row));
+    }
+    return records;
+}
 
 
 Table::Cell& Table::Cell::operator= (Cell&& other)
@@ -120,4 +169,20 @@ Table::Cell& Table::Cell::operator= (const DataObject& d)
         break;
     }
     return *this;
+}
+
+
+DataObject Table::Cell::toDataObject(sql::DataType type) const
+{
+    if (this->isNull()) return DataObject(type);
+
+    switch (type)
+    {
+    case sql::DataType::INTEGER:
+        return DataObject(this->cast<long>());
+    case sql::DataType::TEXT:
+        return DataObject(this->cast<std::string>());
+    default:
+        throw sql::Exception("Cell: unsupported type");
+    } 
 }

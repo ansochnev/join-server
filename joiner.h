@@ -111,10 +111,11 @@ private:
         sql::IStatement *statement = m_conn->createStatement();
         sql::ISelection *selection = statement->select(sqlQuery);
 
-        while(selection->hasNext()) 
+        while(true) 
         {
-            selection->next();
-            rw->write(fmt::sprintf("%v,%v,%v", 
+            if (selection->end()) break;
+
+            rw->write(fmt::sprintf("%v,%v\n", 
                 
                 selection->isNull(0) ? "" 
                     : fmt::sprintf("%v", selection->getLong(0)),
@@ -122,6 +123,8 @@ private:
                 selection->isNull(1) ? "" 
                     : fmt::sprintf("%v", selection->getString(1))
             ));
+            
+            selection->next();
         }
     }
 };

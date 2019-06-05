@@ -4,10 +4,12 @@
 
 class Statement : public sql::IStatement
 {
-    Memstore *m_db;
+    Memstore        *m_db;
+    sql::ISelection *m_selection;
 
 public:
-    Statement(Memstore* db) : m_db(db) {}
+    Statement(Memstore* db) : m_db(db), m_selection(nullptr) {}
+    ~Statement() { close(); }
 
     void modify(const std::string& query) override {
         execute(query);
@@ -15,7 +17,10 @@ public:
 
     sql::ISelection* select(const std::string& query) override {
         execute(query);
+        return m_selection;
     }
+
+    void close() override { if (m_selection) delete m_selection; }
 
 private:
     void execute(const std::string& query)
@@ -91,7 +96,7 @@ private:
         m_db->insert(tableName, std::move(row));
     }
     
-    void executeDelete(std::istringstream& query)
+    void executeDelete(std::istringstream& query [[maybe_unused]])
     {
     }
 
@@ -123,5 +128,7 @@ private:
             throw sql::Exception(
                 fmt::sprintf("table %v does not exist", tableName));
         }
+
+        m_selection = m_db->selectAll(tableName);
     }
 };

@@ -18,8 +18,9 @@ add_executable(join_server
                             util/util.cpp 
                             memstore/memstore.cpp
                             memstore/parse.cpp
-                            memstore/schema.cpp
-                            memstore/db.cpp)
+                            memstore/db.cpp
+                            memstore/table.cpp
+                            memstore/data_object.cpp)
 
 set_target_properties(join_server PROPERTIES
     CXX_STANDARD 17
