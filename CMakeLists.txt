@@ -10,7 +10,16 @@ find_package(Threads)
 find_package(Boost COMPONENTS system REQUIRED)
 include_directories(${Boost_INCLUDE_DIR})
 
-add_executable(join_server main.cpp server.cpp)
+include_directories(util memstore)
+
+add_executable(join_server 
+                            main.cpp 
+                            server.cpp 
+                            util/util.cpp
+                            memstore/memstore.cpp
+                            memstore/parse.cpp
+                            memstore/table.cpp
+                            memstore/data_object.cpp)
 
 set_target_properties(join_server PROPERTIES
     CXX_STANDARD 17

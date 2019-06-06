@@ -10,6 +10,7 @@
 
 namespace proto 
 {
+const std::string SHOW         = "SHOW";
 const std::string INSERT       = "INSERT";
 const std::string TRUNCATE     = "TRUNCATE";
 const std::string INTERSECTION = "INTERSECTION";
