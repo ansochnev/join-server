@@ -59,11 +59,13 @@ public:
     const Schema& schema() const noexcept { return m_schema; }
 
     using RowID = std::size_t;
+
     RowID insert(Record&& values);
-    std::vector<Record> select(const std::vector<RowID>& rows) const;
     void  remove(RowID row);
+    void  truncate() { m_rows.clear(); }
 
     Row operator[] (RowID r) { return Row(this, r); }
+    std::vector<Record> select(const std::vector<RowID>& rows) const;
 
     using iterator = Iterator;
     iterator begin() { return !m_rows.empty() ? Iterator(this, 0) : end(); }

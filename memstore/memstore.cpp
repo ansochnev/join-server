@@ -70,6 +70,10 @@ public:
         m_tables[tableName]->insert(std::move(row));
     }
 
+    void truncate(const std::string& tableName) {
+        m_tables[tableName]->truncate();
+    }
+
     FullTableSelection* selectAll(const std::string& tableName) {
         Table *tab = m_tables[tableName];
         return new FullTableSelection(tab->begin(), tab->end());
@@ -175,8 +179,15 @@ private:
     }
     
 
-    void executeDelete(std::istringstream& query [[maybe_unused]])
+    void executeDelete(std::istringstream& query)
     {
+        std::string token;
+        query >> token;
+        assertEq(token, "FROM");
+
+        query >> token;
+        std::string tableName = trimRight(token, ";");
+        m_db->truncate(tableName);
     }
 
 
