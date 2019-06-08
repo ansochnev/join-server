@@ -167,8 +167,105 @@ public:
         Table *tab = m_tables[tableName];
         return new FullTableSelection(tab->begin(), tab->end());
     }
+
+    Selection* getInnerJoin(const std::string& table1,  
+                            const std::string& table2, 
+                            const std::string& column1, 
+                            const std::string& column2);
+
+private:
+    template<typename T>
+    std::vector<std::pair<Table::RowID, Table::RowID>> 
+    findEqualRowsOnColumn(Table* tab1, Table* tab2, 
+                          std::size_t col1, std::size_t col2);
 };
 
+
+Selection* Memstore::getInnerJoin(const std::string& table1,  
+                                  const std::string& table2, 
+                                  const std::string& column1, 
+                                  const std::string& column2)
+{
+    Table *tab1 = m_tables[table1];
+    Table *tab2 = m_tables[table2];
+
+    std::size_t col1 = tab1->schema().indexOf(column1);
+    std::size_t col2 = tab2->schema().indexOf(column2);
+
+    sql::DataType type = tab1->schema().typeOf(col1);
+
+    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairs;
+    switch (type)
+    {
+    case sql::DataType::INTEGER:
+        rowPairs = findEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
+        break;
+
+    case sql::DataType::TEXT:
+        rowPairs = findEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
+        break;
+    }
+
+    std::vector<Table::RowID> rows1;
+    std::vector<Table::RowID> rows2;
+
+    for (auto pair : rowPairs) {
+        rows1.push_back(pair.first);
+        rows2.push_back(pair.second);
+    }
+
+    Selection::Info selectionInfo;
+
+    selectionInfo.tables = {tab1, tab2};
+    selectionInfo.rows   = {rows1, rows2};
+
+    for (const ColumnInfo& column : tab1->schema()) 
+    {
+        Selection::Info::Column selcol;
+        selcol.name = table1 + "." + column.name();
+        selcol.type = column.type();
+        selcol.tableIndex = 0;
+        selcol.tableColumnIndex = tab1->schema().indexOf(column.name());
+        selectionInfo.columns.push_back(selcol);
+    }
+
+    for (const ColumnInfo& column : tab2->schema()) 
+    {
+        Selection::Info::Column selcol;
+        selcol.name = table2 + "." + column.name();
+        selcol.type = column.type();
+        selcol.tableIndex = 1;
+        selcol.tableColumnIndex = tab2->schema().indexOf(column.name());
+        selectionInfo.columns.push_back(selcol);
+    }
+
+    return new Selection(selectionInfo);
+}
+
+
+template<typename T>
+std::vector<std::pair<Table::RowID, Table::RowID>> 
+Memstore::findEqualRowsOnColumn(Table* tab1, Table* tab2, 
+                      std::size_t col1, std::size_t col2)
+{
+    std::vector<std::pair<Table::RowID, Table::RowID>> ids;
+    for (auto row1 : *tab1) 
+    {
+        if (row1.isNull(col1)) {
+            continue;
+        }
+        for (auto row2 : *tab2) 
+        {
+            if (row2.isNull(col2)) {
+                continue;
+            }
+            if (row1.cast<T>(col1) == row2.cast<T>(col2)) {
+                ids.emplace_back(row1.id(), row2.id());
+            }
+        }
+    }
+    return ids;
+}
 
 
 class Statement : public sql::IStatement
@@ -292,8 +389,14 @@ private:
         if (tokens.size() == 3) {
             executeSelectAll(std::move(tokens));
         } 
+        else if (tokens.size() == 9) {
+            executeSelectWithJoin(std::move(tokens));
+        }
+        else if (tokens.size() == 19) {
+            executeSelectWithJoinWithWhere(std::move(tokens));
+        }
         else {
-            throw sql::Exception("select anything");
+            throw sql::Exception("bad select");
         }
     }
 
@@ -312,6 +415,22 @@ private:
 
         m_selection = m_db->selectAll(tableName);
     }
+
+
+    void executeSelectWithJoin(std::vector<std::string>&& tokens)
+    {
+        std::string table1 = tokens[2];
+        std::string table2 = tokens[4];
+        std::string column1 = split(tokens[6], '.')[1];
+        std::string column2 = trimRight(split(tokens[8], '.')[1], ";");
+        m_selection = m_db->getInnerJoin(table1, table2, column1, column2);
+    };
+
+
+    void executeSelectWithJoinWithWhere(std::vector<std::string>&& tokens)
+    {
+
+    };
 };
 
 

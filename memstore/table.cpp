@@ -12,6 +12,7 @@ std::size_t Schema::addColumn(const ColumnInfo& ci)
     return m_columns.size() - 1;
 }
 
+
 const ColumnInfo& Schema::operator[] (const std::string& name) const
 {
     for (const ColumnInfo& col : *this) {
@@ -22,6 +23,7 @@ const ColumnInfo& Schema::operator[] (const std::string& name) const
     throw sql::Exception("column " + name + " does not exist");
 }
 
+
 std::size_t Schema::primaryKeyIndex() const
 {
     for (std::size_t i = 0; i < m_columns.size(); ++i) {
@@ -30,6 +32,41 @@ std::size_t Schema::primaryKeyIndex() const
         }
     }
     throw sql::Exception("Schema: primary key not found");
+}
+
+
+bool Schema::contains(const std::string& columnName) const
+{
+    for (const ColumnInfo& column : m_columns) {
+        if (column.name() == columnName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+std::size_t Schema::indexOf(const std::string& columnName) const
+{
+    for (std::size_t i = 0; i < m_columns.size(); ++i) {
+        if (m_columns[i].name() == columnName) {
+            return i;
+        }
+    }
+    throw sql::Exception("Schema: column '" + columnName + "' does not exist");
+}
+
+
+sql::DataType Schema::typeOf(std::size_t columnIndex) const 
+{
+    return m_columns[columnIndex].type();
+}
+
+
+sql::DataType Schema::typeOf(const std::string& columnName) const
+{
+    std::size_t i = indexOf(columnName);
+    return m_columns[i].type();
 }
 
 

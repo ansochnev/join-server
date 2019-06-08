@@ -56,7 +56,7 @@ private:
             rw->writeError("bad request");
             return;
         }
-        writeSelection(rw, fmt::sprintf("SELECT * FROM %v;", tokens[1]));
+        writeTable(rw, fmt::sprintf("SELECT * FROM %v;", tokens[1]));
     }
 
     void insert(proto::IResponseWriter* rw, const std::string& query)
@@ -101,7 +101,7 @@ private:
     }
 
     void intersection(proto::IResponseWriter* rw) {
-        writeSelection(rw, "SELECT * FROM A JOIN B ON A.id = B.id");
+        writeSelection(rw, "SELECT * FROM A JOIN B ON A.id = B.id;");
     }
 
     void symdiff(proto::IResponseWriter* rw) 
@@ -111,7 +111,7 @@ private:
                            std::string(" A.id IS NULL OR B.id IS NULL;"));
     }
 
-    void writeSelection(proto::IResponseWriter* rw, const std::string& sqlQuery)
+    void writeTable(proto::IResponseWriter* rw, const std::string& sqlQuery)
     {
         try 
         {
@@ -129,6 +129,40 @@ private:
 
                     selection->isNull(1) ? "" 
                         : fmt::sprintf("%v", selection->getString(1))
+                ));
+                
+                selection->next();
+            }
+
+            selection->close();
+            statement->close();
+        }
+        catch (std::exception& e) {
+            rw->writeError(e.what());
+        }
+    }
+
+    void writeSelection(proto::IResponseWriter* rw, const std::string& sqlQuery)
+    {
+        try 
+        {
+            sql::IStatement *statement = m_conn->createStatement();
+            sql::ISelection *selection = statement->select(sqlQuery);
+
+            while(true) 
+            {
+                if (selection->end()) break;
+
+                rw->write(fmt::sprintf("%v,%v,%v\n", 
+                    
+                    selection->isNull(0) ? "" 
+                        : fmt::sprintf("%v", selection->getLong(0)),
+
+                    selection->isNull(1) ? "" 
+                        : fmt::sprintf("%v", selection->getString(1)),
+
+                    selection->isNull(3) ? ""
+                        : fmt::sprintf("%v", selection->getString(3))
                 ));
                 
                 selection->next();

@@ -28,7 +28,13 @@ public:
     Schema() = default;
 
     std::size_t addColumn(const ColumnInfo& ci);
+
+    bool contains(const std::string& columnName) const;
+    std::size_t indexOf(const std::string& columnName) const;
     std::size_t primaryKeyIndex() const;
+
+    sql::DataType typeOf(std::size_t columnIndex) const;
+    sql::DataType typeOf(const std::string& columnName) const;
 
     const ColumnInfo& operator[] (int index) const { return m_columns[index]; }
     const ColumnInfo& operator[] (const std::string& name) const;
@@ -91,11 +97,6 @@ private:
             explicit Holder(T&& t)      : value(std::move(t)) {}
         };
 
-        template<typename T>
-        T& cast() const {
-            return static_cast<Holder<T>*>(m_holder)->value;
-        }
-
         AbstractHolder *m_holder;
 
     public:
@@ -114,6 +115,11 @@ private:
         Cell& operator= (std::string&& s);
         Cell& operator= (const DataObject& d);
         
+        template<typename T>
+        T& cast() const {
+            return static_cast<Holder<T>*>(m_holder)->value;
+        }
+
         bool isNull() const                  { return m_holder == nullptr; }
         long getLong() const                 { return cast<long>();        }
         const std::string& getString() const { return cast<std::string>(); }
@@ -128,8 +134,15 @@ private:
     public:
         Row(Table* table, RowID row) : m_table(table), m_row(row) {}
 
+        RowID id() const { return m_row; }
+
         bool isNull(int column) const { 
             return m_table->m_rows[m_row][column].isNull(); 
+        }
+
+        template<typename T>
+        T cast(int column) const {
+            return m_table->m_rows[m_row][column].cast<T>();
         }
 
         long getLong(int column) const {
