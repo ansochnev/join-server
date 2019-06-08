@@ -141,6 +141,15 @@ Record Table::makeRecord(RowID row) const
 {
     Record record;
     record.reserve(m_schema.size());
+
+    if (row == std::size_t(-1)) {
+        for (const ColumnInfo& col : m_schema) {
+            record.emplace_back(DataObject(col.type()));
+        }
+        return record;
+    }
+
+
     for (std::size_t i = 0; i < m_schema.size(); ++i) {
         record.emplace_back(m_rows[row][i].toDataObject(m_schema[i].type()));
     }

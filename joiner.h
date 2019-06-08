@@ -56,7 +56,36 @@ private:
             rw->writeError("bad request");
             return;
         }
-        writeTable(rw, fmt::sprintf("SELECT * FROM %v;", tokens[1]));
+       
+        std::string sqlQuery = fmt::sprintf("SELECT * FROM %v;", tokens[1]);
+
+        try 
+        {
+            sql::IStatement *statement = m_conn->createStatement();
+            sql::ISelection *selection = statement->select(sqlQuery);
+
+            while(true) 
+            {
+                if (selection->end()) break;
+
+                rw->write(fmt::sprintf("%v,%v\n", 
+                    
+                    selection->isNull(0) ? "" 
+                        : fmt::sprintf("%v", selection->getLong(0)),
+
+                    selection->isNull(1) ? "" 
+                        : fmt::sprintf("%v", selection->getString(1))
+                ));
+                
+                selection->next();
+            }
+
+            selection->close();
+            statement->close();
+        }
+        catch (std::exception& e) {
+            rw->writeError(e.what());
+        }
     }
 
     void insert(proto::IResponseWriter* rw, const std::string& query)
@@ -100,35 +129,28 @@ private:
         statement->close();
     }
 
-    void intersection(proto::IResponseWriter* rw) {
-        writeSelection(rw, "SELECT * FROM A JOIN B ON A.id = B.id;");
-    }
-
-    void symdiff(proto::IResponseWriter* rw) 
+    void intersection(proto::IResponseWriter* rw) 
     {
-        writeSelection(rw, std::string("SELECT * FROM A FULL OUTER JOIN B") + 
-                           std::string(" ON A.id = B.id WHERE") + 
-                           std::string(" A.id IS NULL OR B.id IS NULL;"));
-    }
-
-    void writeTable(proto::IResponseWriter* rw, const std::string& sqlQuery)
-    {
+        std::string query = "SELECT * FROM A JOIN B ON A.id = B.id;";
         try 
         {
             sql::IStatement *statement = m_conn->createStatement();
-            sql::ISelection *selection = statement->select(sqlQuery);
+            sql::ISelection *selection = statement->select(query);
 
             while(true) 
             {
                 if (selection->end()) break;
 
-                rw->write(fmt::sprintf("%v,%v\n", 
+                rw->write(fmt::sprintf("%v,%v,%v\n", 
                     
                     selection->isNull(0) ? "" 
                         : fmt::sprintf("%v", selection->getLong(0)),
 
                     selection->isNull(1) ? "" 
-                        : fmt::sprintf("%v", selection->getString(1))
+                        : fmt::sprintf("%v", selection->getString(1)),
+
+                    selection->isNull(3) ? ""
+                        : fmt::sprintf("%v", selection->getString(3))
                 ));
                 
                 selection->next();
@@ -142,12 +164,15 @@ private:
         }
     }
 
-    void writeSelection(proto::IResponseWriter* rw, const std::string& sqlQuery)
+    void symdiff(proto::IResponseWriter* rw) 
     {
+        std::string query = std::string("SELECT * FROM A FULL OUTER JOIN B") + 
+                            std::string(" ON A.id = B.id WHERE") + 
+                            std::string(" A.id IS NULL OR B.id IS NULL;");
         try 
         {
             sql::IStatement *statement = m_conn->createStatement();
-            sql::ISelection *selection = statement->select(sqlQuery);
+            sql::ISelection *selection = statement->select(query);
 
             while(true) 
             {
@@ -155,7 +180,7 @@ private:
 
                 rw->write(fmt::sprintf("%v,%v,%v\n", 
                     
-                    selection->isNull(0) ? "" 
+                    selection->isNull(0) ? fmt::sprintf("%v", selection->getLong(2)) 
                         : fmt::sprintf("%v", selection->getLong(0)),
 
                     selection->isNull(1) ? "" 

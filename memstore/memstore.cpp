@@ -173,11 +173,21 @@ public:
                             const std::string& column1, 
                             const std::string& column2);
 
+    Selection* getFullOuterJoin(const std::string& table1,
+                                const std::string& table2,
+                                const std::string& column1,
+                                const std::string& column2);
+
 private:
     template<typename T>
     std::vector<std::pair<Table::RowID, Table::RowID>> 
     findEqualRowsOnColumn(Table* tab1, Table* tab2, 
                           std::size_t col1, std::size_t col2);
+    
+    template<typename T>
+    std::vector<std::pair<Table::RowID, Table::RowID>> 
+    findNotEqualRowsOnColumn(Table* tab1, Table* tab2, 
+                             std::size_t col1, std::size_t col2);
 };
 
 
@@ -266,6 +276,105 @@ Memstore::findEqualRowsOnColumn(Table* tab1, Table* tab2,
     }
     return ids;
 }
+
+
+Selection* Memstore::getFullOuterJoin(const std::string& table1,  
+                                      const std::string& table2, 
+                                      const std::string& column1, 
+                                      const std::string& column2)
+{
+    Table *tab1 = m_tables[table1];
+    Table *tab2 = m_tables[table2];
+
+    std::size_t col1 = tab1->schema().indexOf(column1);
+    std::size_t col2 = tab2->schema().indexOf(column2);
+
+    sql::DataType type = tab1->schema().typeOf(col1);
+
+    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsLeft;
+    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsRight;
+    switch (type)
+    {
+    case sql::DataType::INTEGER:
+        rowPairsLeft  = findNotEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
+        rowPairsRight = findNotEqualRowsOnColumn<long>(tab2, tab1, col2, col1);
+        break;
+
+    case sql::DataType::TEXT:
+        rowPairsLeft  = findNotEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
+        rowPairsRight = findNotEqualRowsOnColumn<std::string>(tab2, tab1, col2, col1);
+        break;
+    }
+
+    std::vector<Table::RowID> rows1;
+    std::vector<Table::RowID> rows2;
+
+    for (auto pair : rowPairsLeft) {
+        rows1.push_back(pair.first);
+        rows2.push_back(pair.second);
+    }
+
+    for (auto pair : rowPairsRight) {
+        rows1.push_back(pair.second);
+        rows2.push_back(pair.first);
+    }
+
+    Selection::Info selectionInfo;
+
+    selectionInfo.tables = {tab1, tab2};
+    selectionInfo.rows   = {rows1, rows2};
+
+    for (const ColumnInfo& column : tab1->schema()) 
+    {
+        Selection::Info::Column selcol;
+        selcol.name = table1 + "." + column.name();
+        selcol.type = column.type();
+        selcol.tableIndex = 0;
+        selcol.tableColumnIndex = tab1->schema().indexOf(column.name());
+        selectionInfo.columns.push_back(selcol);
+    }
+
+    for (const ColumnInfo& column : tab2->schema()) 
+    {
+        Selection::Info::Column selcol;
+        selcol.name = table2 + "." + column.name();
+        selcol.type = column.type();
+        selcol.tableIndex = 1;
+        selcol.tableColumnIndex = tab2->schema().indexOf(column.name());
+        selectionInfo.columns.push_back(selcol);
+    }
+
+    return new Selection(selectionInfo);
+}
+
+
+template<typename T>
+std::vector<std::pair<Table::RowID, Table::RowID>> 
+Memstore::findNotEqualRowsOnColumn(Table* tab1, Table* tab2, 
+                                   std::size_t col1, std::size_t col2)
+{
+    std::vector<std::pair<Table::RowID, Table::RowID>> ids;
+    for (auto row1 : *tab1) 
+    {
+        if (row1.isNull(col1)) {
+            continue;
+        }
+        for (auto row2 : *tab2) 
+        {
+            if (row2.isNull(col2)) {
+                continue;
+            }
+            if (row1.cast<T>(col1) == row2.cast<T>(col2)) {
+                goto skip_push;
+            }
+        }
+        ids.emplace_back(row1.id(), std::size_t(-1));
+    skip_push:
+        ;
+    }
+    return ids;
+}
+
 
 
 class Statement : public sql::IStatement
@@ -413,6 +522,7 @@ private:
                 fmt::sprintf("table %v does not exist", tableName));
         }
 
+        if (m_selection) delete m_selection;
         m_selection = m_db->selectAll(tableName);
     }
 
@@ -423,13 +533,21 @@ private:
         std::string table2 = tokens[4];
         std::string column1 = split(tokens[6], '.')[1];
         std::string column2 = trimRight(split(tokens[8], '.')[1], ";");
+        
+        if (m_selection) delete m_selection;
         m_selection = m_db->getInnerJoin(table1, table2, column1, column2);
     };
 
 
     void executeSelectWithJoinWithWhere(std::vector<std::string>&& tokens)
     {
-
+        std::string table1 = tokens[2];
+        std::string table2 = tokens[6];
+        std::string column1 = split(tokens[8], '.')[1];
+        std::string column2 = trimRight(split(tokens[10], '.')[1], ";");
+        
+        if (m_selection) delete m_selection;
+        m_selection = m_db->getFullOuterJoin(table1, table2, column1, column2);
     };
 };
 
