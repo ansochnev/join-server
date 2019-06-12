@@ -4,14 +4,49 @@
 #include "memstore.h"
 #include "table.h"
 
+class ITableLocker
+{
+public:
+    virtual void unlock_shared(const std::string& tableName) = 0;
+    virtual ~ITableLocker() {}
+};
+
 class FullTableSelection : public sql::ISelection
 {
-    Table::iterator m_currentRow;
-    Table::iterator m_end;
+    ITableLocker    *m_storage;
+    std::string      m_tableName;
+    Table::iterator  m_currentRow;
+    Table::iterator  m_end;
 public:
-    FullTableSelection(const Table::iterator& begin, 
+    FullTableSelection(ITableLocker* storage,
+                       std::string tableName,
+                       const Table::iterator& begin, 
                        const Table::iterator& end)
-        : m_currentRow(begin), m_end(end) {}
+        : m_storage(storage), m_tableName(tableName), 
+          m_currentRow(begin), m_end(end) 
+    {
+    }
+
+    FullTableSelection(const FullTableSelection&) = delete;
+    FullTableSelection(FullTableSelection&& other) 
+        : m_storage(other.m_storage), m_tableName(other.m_tableName),
+          m_currentRow(other.m_currentRow), m_end(other.m_end)
+    {
+        other.m_storage = nullptr;
+    }
+
+    ~FullTableSelection() { close(); }
+
+    FullTableSelection& operator= (const FullTableSelection&) = delete;
+    FullTableSelection& operator= (FullTableSelection&& rhs)
+    {
+        m_storage = rhs.m_storage;
+        m_tableName = rhs.m_tableName;
+        m_currentRow = rhs.m_currentRow;
+        m_end = rhs.m_end;
+        rhs.m_storage = nullptr;
+        return *this;
+    }
 
     void next() override { ++m_currentRow; }
     bool end()  override { return m_currentRow == m_end; }
@@ -28,7 +63,13 @@ public:
         return (*m_currentRow).getString(columnIndex);
     }
 
-    void close() override {}
+    void close() override 
+    { 
+        if (m_storage) {
+            m_storage->unlock_shared(m_tableName);
+            m_storage = nullptr;
+        }
+    }
 };
 
 

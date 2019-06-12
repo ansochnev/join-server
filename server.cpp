@@ -1,5 +1,6 @@
-#include "protocol.h"
 #include <sstream>
+#include <thread>
+#include "protocol.h"
 
 class Session : public std::enable_shared_from_this<Session>,
                 public proto::IResponseWriter
@@ -92,7 +93,9 @@ proto::Server::~Server()
 void proto::Server::run() 
 {
     do_accept();
+    std::thread th([this]() { m_service.run(); });
     m_service.run();
+    th.join();
 }
 
 void proto::Server::do_accept()

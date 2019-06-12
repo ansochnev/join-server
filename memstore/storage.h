@@ -2,39 +2,75 @@
 #define STORAGE_H
 
 #include <map>
+#include <mutex>
+#include <shared_mutex>
+
 #include "memstore.h"
 #include "table.h"
 #include "selection.h"
 
 
-class Memstore
+class Memstore : public ITableLocker
 {
-    std::map<std::string, Table*> m_tables;
+    struct table_t 
+    {
+        Table *table;
+        std::shared_mutex mutex;
+    };
+
+    std::shared_mutex m_tablesMutex;
+    std::map<std::string, table_t> m_tables;
 
 public:
-    void createTable(const std::string& tableName, const Schema& schema) {
-        m_tables.emplace(tableName, new Table(schema));
+    void createTable(const std::string& tableName, const Schema& schema) 
+    {
+        std::unique_lock<std::shared_mutex> lock(m_tablesMutex);
+        m_tables[tableName].table = new Table(schema);
     }
 
-    bool hasTable(const std::string& tableName) const {
+    bool hasTable(const std::string& tableName)
+    {
+        std::shared_lock<std::shared_mutex> lock(m_tablesMutex);
         return m_tables.find(tableName) != m_tables.end();
     }
 
-    const Schema& tableSchema(const std::string& tableName) {
-        return m_tables[tableName]->schema();
+    const Schema& tableSchema(const std::string& tableName) 
+    {
+        std::shared_lock<std::shared_mutex> lock(m_tablesMutex);
+        return m_tables[tableName].table->schema();
     }
 
-    void insert(const std::string& tableName, std::vector<DataObject>&& row) {
-        m_tables[tableName]->insert(std::move(row));
+    void insert(const std::string& tableName, std::vector<DataObject>&& row) 
+    {
+        std::shared_lock<std::shared_mutex> lockStorage(m_tablesMutex);
+        std::unique_lock<std::shared_mutex> lockTable(m_tables[tableName].mutex);
+        m_tables[tableName].table->insert(std::move(row));
     }
 
-    void truncate(const std::string& tableName) {
-        m_tables[tableName]->truncate();
+    void truncate(const std::string& tableName) 
+    {
+        std::shared_lock<std::shared_mutex> lockStorage(m_tablesMutex);
+        std::unique_lock<std::shared_mutex> lockTable(m_tables[tableName].mutex);
+        m_tables[tableName].table->truncate();
     }
 
-    FullTableSelection* selectAll(const std::string& tableName) {
-        Table *tab = m_tables[tableName];
-        return new FullTableSelection(tab->begin(), tab->end());
+    void lock_shared(const std::string& tableName)
+    {
+        m_tablesMutex.lock_shared();
+        m_tables[tableName].mutex.lock_shared();
+    }
+
+    void unlock_shared(const std::string& tableName) override
+    {
+        m_tables[tableName].mutex.unlock_shared();
+        m_tablesMutex.unlock_shared();
+    }
+
+    FullTableSelection* selectAll(const std::string& tableName) 
+    {
+        this->lock_shared(tableName);
+        Table *tab = m_tables[tableName].table;
+        return new FullTableSelection(this, tableName, tab->begin(), tab->end());
     }
 
     Selection* getInnerJoin(const std::string& table1,  
@@ -103,8 +139,12 @@ Selection* Memstore::getInnerJoin(const std::string& table1,
                                   const std::string& column1, 
                                   const std::string& column2)
 {
-    Table *tab1 = m_tables[table1];
-    Table *tab2 = m_tables[table2];
+    std::shared_lock<std::shared_mutex> lockStorage(m_tablesMutex);
+    std::shared_lock<std::shared_mutex> lockTable1(m_tables[table1].mutex);
+    std::shared_lock<std::shared_mutex> lockTable2(m_tables[table2].mutex);
+
+    Table *tab1 = m_tables[table1].table;
+    Table *tab2 = m_tables[table2].table;
 
     std::size_t col1 = tab1->schema().indexOf(column1);
     std::size_t col2 = tab2->schema().indexOf(column2);
@@ -271,8 +311,12 @@ Selection* Memstore::getFullOuterJoin(const std::string& table1,
                                       const std::string& column1, 
                                       const std::string& column2)
 {
-    Table *tab1 = m_tables[table1];
-    Table *tab2 = m_tables[table2];
+    std::shared_lock<std::shared_mutex> lockStorage(m_tablesMutex);
+    std::shared_lock<std::shared_mutex> lockTable1(m_tables[table1].mutex);
+    std::shared_lock<std::shared_mutex> lockTable2(m_tables[table2].mutex);
+    
+    Table *tab1 = m_tables[table1].table;
+    Table *tab2 = m_tables[table2].table;
 
     std::size_t col1 = tab1->schema().indexOf(column1);
     std::size_t col2 = tab2->schema().indexOf(column2);
