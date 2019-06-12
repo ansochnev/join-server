@@ -71,10 +71,7 @@ public:
     ~Table();
 
     const Schema& schema() const noexcept { return m_schema; }
-
-    bool hasIndex(std::size_t col) const { 
-        return m_schema.primaryKeyIndex() == col; 
-    }
+    bool hasIndex(std::size_t col) const;
 
     template<typename T>
     const Index<T>* index(std::size_t col) const { 

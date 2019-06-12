@@ -70,6 +70,7 @@ sql::DataType Schema::typeOf(const std::string& columnName) const
 }
 
 
+
 Table::Table(const Schema& s) : m_schema(s) 
 {
     m_indices.reserve(m_schema.size());
@@ -113,6 +114,11 @@ Table::~Table()
     for (AbstractIndex* index : m_indices) {
         if (index) delete index;
     }
+}
+
+
+bool Table::hasIndex(std::size_t col) const { 
+    return m_schema.primaryKeyIndex() == col; 
 }
 
 
