@@ -2,6 +2,8 @@
 #define TABLE_H
 
 #include <vector>
+#include <map>
+#include <set>
 #include "data_object.h"
 
 class ColumnInfo 
@@ -49,26 +51,41 @@ public:
 
 class Table
 {
+private:
     class Cell;
     class Row;
+    class AbstractIndex;
+public:
     class Iterator;
-
+    template<typename T> class Index;
+    
+private:
     Schema                         m_schema;
+    std::vector<AbstractIndex*>    m_indices;
     std::vector<std::vector<Cell>> m_rows;
 
 public:
     explicit Table(const Schema& s);
     explicit Table(Schema&& s);
 
-    ~Table() = default;
+    ~Table();
 
     const Schema& schema() const noexcept { return m_schema; }
+
+    bool hasIndex(std::size_t col) const { 
+        return m_schema.primaryKeyIndex() == col; 
+    }
+
+    template<typename T>
+    const Index<T>* index(std::size_t col) const { 
+        return static_cast<Index<T>*>(m_indices[col]); 
+    }
 
     using RowID = std::size_t;
 
     RowID insert(Record&& values);
     void  remove(RowID row);
-    void  truncate() { m_rows.clear(); }
+    void  truncate(); 
 
     Row operator[] (RowID r) { return Row(this, r); }
     std::vector<Record> select(const std::vector<RowID>& rows) const;
@@ -161,6 +178,15 @@ private:
     };
     
 
+    class AbstractIndex 
+    {
+    public:
+        virtual void clear() = 0; 
+        virtual ~AbstractIndex() {}
+    };
+
+
+public:
     class Iterator
     {
         Table* m_table;
@@ -194,7 +220,60 @@ private:
             return *this;
         }
         
-        Row       operator*  () { return Row(m_table, m_row); }
+        Row operator*  () { return Row(m_table, m_row); }
+    };
+
+
+    template<typename T>
+    class Index : public AbstractIndex
+    {
+        using Container = std::map<T, std::set<RowID>>;
+        Container m_map;
+
+        class ConstIterator
+        {
+            typename Container::const_iterator m_iter;
+        public:
+            ConstIterator(const typename Container::const_iterator& iter) 
+                : m_iter(iter) {}
+
+            bool operator!= (const ConstIterator& rhs) const {
+                return m_iter != rhs.m_iter;
+            }
+
+            bool operator== (const ConstIterator& rhs) const {
+                return m_iter == rhs.m_iter;
+            }
+
+            ConstIterator& operator++ () { return (++m_iter, *this); }
+            const T& operator* () const  { return m_iter->first;     }
+        };
+
+    public:
+        Index() = default;
+
+        void insert(const T& val, RowID row) { m_map[val].insert(row); }
+        void remove(RowID row);
+        void clear() override { m_map.clear(); }
+
+        std::vector<RowID> rows(const T& val) const
+        {
+            std::vector<RowID> ret;
+            auto found = m_map.find(val);
+            ret.reserve(found->second.size());
+            for (RowID row : found->second) {
+                ret.push_back(row);
+            }
+            return ret;
+        }
+
+        using const_iterator = ConstIterator;
+        const_iterator begin() const { return ConstIterator(m_map.begin()); }
+        const_iterator end() const   { return ConstIterator(m_map.end());   }
+
+        const_iterator find(const T& val) const {
+            return ConstIterator(m_map.find(val));
+        }
     };
 };
 

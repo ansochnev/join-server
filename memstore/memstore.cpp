@@ -100,7 +100,7 @@ public:
 };
 
 
-Selection::Selection(const Info& selectionInfo) : m_currentRecordIndex(0)
+Selection::Selection(const Info& selectionInfo) : m_currentRecordIndex(-1)
 {
     std::vector<std::vector<Record>> tableRecordMatrix;
 
@@ -114,7 +114,6 @@ Selection::Selection(const Info& selectionInfo) : m_currentRecordIndex(0)
 
     std::size_t rowCount = tableRecordMatrix[0].size();
     m_records.resize(rowCount);
-
     std::size_t table, col;
     for (std::size_t row = 0; row < rowCount; ++row) 
     {
@@ -125,6 +124,10 @@ Selection::Selection(const Info& selectionInfo) : m_currentRecordIndex(0)
             col   = column.tableColumnIndex;
             m_records[row].push_back(tableRecordMatrix[table][row][col]);
         }
+    }
+
+    if (!m_records.empty()) {
+        m_currentRecordIndex = 0;
     }
 }
 
@@ -188,6 +191,16 @@ private:
     std::vector<std::pair<Table::RowID, Table::RowID>> 
     findNotEqualRowsOnColumn(Table* tab1, Table* tab2, 
                              std::size_t col1, std::size_t col2);
+
+    template<typename T>
+    std::vector<std::pair<Table::RowID, Table::RowID>>
+    findEqualRowsWithIndex(Table* tab1, Table* tab2,
+                           std::size_t col1, std::size_t col2);
+    
+    template<typename T>
+    std::vector<std::pair<Table::RowID, Table::RowID>>
+    findNotEqualRowsWithIndex(Table* tab1, Table* tab2,
+                              std::size_t col1, std::size_t col2);
 };
 
 
@@ -208,11 +221,21 @@ Selection* Memstore::getInnerJoin(const std::string& table1,
     switch (type)
     {
     case sql::DataType::INTEGER:
-        rowPairs = findEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
+        if (tab1->hasIndex(col1) && tab2->hasIndex(col2)) {
+            rowPairs = findEqualRowsWithIndex<long>(tab1, tab2, col1, col2);
+        } 
+        else {
+            rowPairs = findEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
+        }
         break;
 
     case sql::DataType::TEXT:
-        rowPairs = findEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
+        if (tab1->hasIndex(col1) && tab2->hasIndex(col2)) {
+            rowPairs = findEqualRowsWithIndex<std::string>(tab1, tab2, col1, col2);
+        } 
+        else {
+            rowPairs = findEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
+        }
         break;
     }
 
@@ -278,6 +301,30 @@ Memstore::findEqualRowsOnColumn(Table* tab1, Table* tab2,
 }
 
 
+template<typename T>
+std::vector<std::pair<Table::RowID, Table::RowID>>
+Memstore::findEqualRowsWithIndex(Table* tab1, Table* tab2,
+                                 std::size_t col1, std::size_t col2)
+{
+    std::vector<std::pair<Table::RowID, Table::RowID>> ids;
+
+    auto index1 = tab1->index<T>(col1);
+    auto index2 = tab2->index<T>(col2);
+
+    for (const T& val1 : *index1) {
+        auto iter = index2->find(val1);
+        if (iter != index2->end()) {
+            for (Table::RowID id1 : index1->rows(val1)) {
+                for (Table::RowID id2 : index2->rows(val1)) {
+                    ids.emplace_back(id1, id2);
+                }
+            }
+        }
+    }
+    return ids;
+}
+
+
 Selection* Memstore::getFullOuterJoin(const std::string& table1,  
                                       const std::string& table2, 
                                       const std::string& column1, 
@@ -291,24 +338,41 @@ Selection* Memstore::getFullOuterJoin(const std::string& table1,
 
     sql::DataType type = tab1->schema().typeOf(col1);
 
-    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsLeft;
-    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsRight;
+    //std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsLeft;
+    //std::vector<std::pair<Table::RowID, Table::RowID>> rowPairsRight;
+    std::vector<std::pair<Table::RowID, Table::RowID>> rowPairs;
     switch (type)
     {
     case sql::DataType::INTEGER:
-        rowPairsLeft  = findNotEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
-        rowPairsRight = findNotEqualRowsOnColumn<long>(tab2, tab1, col2, col1);
+        if (tab1->hasIndex(col1) && tab2->hasIndex(col2)) {
+            rowPairs = findNotEqualRowsWithIndex<long>(tab1, tab2, col1, col2);
+        }
+        else {
+            //rowPairsLeft  = findNotEqualRowsOnColumn<long>(tab1, tab2, col1, col2);
+            //rowPairsRight = findNotEqualRowsOnColumn<long>(tab2, tab1, col2, col1);
+        }
         break;
 
     case sql::DataType::TEXT:
-        rowPairsLeft  = findNotEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
-        rowPairsRight = findNotEqualRowsOnColumn<std::string>(tab2, tab1, col2, col1);
+        if (tab1->hasIndex(col1) && tab2->hasIndex(col2)) {
+            rowPairs = findNotEqualRowsWithIndex<std::string>(tab1, tab2, col1, col2);
+        }
+        else {
+            //rowPairsLeft  = findNotEqualRowsOnColumn<std::string>(tab1, tab2, col1, col2);
+            //rowPairsRight = findNotEqualRowsOnColumn<std::string>(tab2, tab1, col2, col1);
+        }
         break;
     }
 
     std::vector<Table::RowID> rows1;
     std::vector<Table::RowID> rows2;
 
+    for (auto pair : rowPairs) {
+        rows1.push_back(pair.first);
+        rows2.push_back(pair.second);
+    }
+
+/*
     for (auto pair : rowPairsLeft) {
         rows1.push_back(pair.first);
         rows2.push_back(pair.second);
@@ -318,6 +382,7 @@ Selection* Memstore::getFullOuterJoin(const std::string& table1,
         rows1.push_back(pair.second);
         rows2.push_back(pair.first);
     }
+*/
 
     Selection::Info selectionInfo;
 
@@ -373,6 +438,55 @@ Memstore::findNotEqualRowsOnColumn(Table* tab1, Table* tab2,
         ;
     }
     return ids;
+}
+
+
+template<typename T>
+std::vector<std::pair<Table::RowID, Table::RowID>>
+Memstore::findNotEqualRowsWithIndex(Table* tab1, Table* tab2,
+                                    std::size_t col1, std::size_t col2)
+{
+    //std::vector<std::pair<Table::RowID, Table::RowID>> ids;
+
+    auto index1 = tab1->index<T>(col1);
+    auto index2 = tab2->index<T>(col2);
+
+    std::multimap<T, std::pair<Table::RowID, Table::RowID>> ids;
+
+    for (const T& val1 : *index1) {
+        auto iter = index2->find(val1);
+        if (iter == index2->end()) {
+            for (Table::RowID id1 : index1->rows(val1)) {
+                ids.insert(std::make_pair(val1, std::make_pair(id1, std::size_t(-1))));
+            }
+        }
+    }
+
+    for (const T& val2 : *index2) {
+        auto iter = index1->find(val2);
+        if (iter == index1->end()) {
+            for (Table::RowID id2 : index2->rows(val2)) {
+                ids.insert(std::make_pair(val2, std::make_pair(std::size_t(-1), id2)));
+            }
+        }
+    }
+
+/*
+    for (const T& val1 : *index1) {
+        auto iter = index2->find(val1);
+        if (iter == index2->end()) {
+            for (Table::RowID id1 : index1->rows(val1)) {
+                ids.emplace_back(id1, std::size_t(-1));
+            }
+        }
+    }
+*/
+    std::vector<std::pair<Table::RowID, Table::RowID>> ret;
+    ret.reserve(ids.size());
+    for (auto pair : ids) {
+        ret.push_back(pair.second);
+    }
+    return ret;
 }
 
 

@@ -70,8 +70,50 @@ sql::DataType Schema::typeOf(const std::string& columnName) const
 }
 
 
-Table::Table(const Schema& s) : m_schema(s) {}
-Table::Table(Schema&& s)      : m_schema(std::move(s)) {}
+Table::Table(const Schema& s) : m_schema(s) 
+{
+    m_indices.reserve(m_schema.size());
+    for (std::size_t i = 0; i < m_schema.size(); ++i) {
+        m_indices.push_back(nullptr);
+    }
+
+    switch (m_schema.typeOf(m_schema.primaryKeyIndex())) 
+    {
+    case sql::DataType::INTEGER:
+        m_indices[m_schema.primaryKeyIndex()] = new Index<long>();
+        break;
+    case sql::DataType::TEXT:
+        m_indices[m_schema.primaryKeyIndex()] = new Index<std::string>();
+        break;
+    }
+}
+
+
+Table::Table(Schema&& s) : m_schema(std::move(s)) 
+{
+    m_indices.reserve(m_schema.size());
+    for (std::size_t i = 0; i < m_schema.size(); ++i) {
+        m_indices.push_back(nullptr);
+    }
+
+    switch (m_schema.typeOf(m_schema.primaryKeyIndex())) 
+    {
+    case sql::DataType::INTEGER:
+        m_indices[m_schema.primaryKeyIndex()] = new Index<long>();
+        break;
+    case sql::DataType::TEXT:
+        m_indices[m_schema.primaryKeyIndex()] = new Index<std::string>();
+        break;
+    }
+}
+
+
+Table::~Table()
+{
+    for (AbstractIndex* index : m_indices) {
+        if (index) delete index;
+    }
+}
 
 
 bool Table::isSatisfySchema(const std::vector<DataObject>& values) const
@@ -133,9 +175,38 @@ Table::RowID Table::insert(Record&& values)
     }
 
     m_rows.push_back(std::move(row));
-    return m_rows.size() - 1;
+    std::size_t rowID =  m_rows.size() - 1;
+
+    std::size_t pkey = m_schema.primaryKeyIndex();
+    switch (m_schema.typeOf(pkey)) 
+    {
+    case sql::DataType::INTEGER:
+        {
+            Index<long> *pLongIndex = static_cast<Index<long>*>(m_indices[pkey]);
+            pLongIndex->insert(m_rows[rowID][pkey].getLong(), rowID);
+        }
+        break;
+
+    case sql::DataType::TEXT:
+        {
+            Index<std::string> *pStringIndex = 
+                static_cast<Index<std::string>*>(m_indices[pkey]);
+            pStringIndex->insert(m_rows[rowID][pkey].getString(), rowID);
+        }
+        break;
+    }
+
+    return rowID;
 }
 
+
+void Table::truncate()
+{
+    m_rows.clear();
+    for (AbstractIndex* index : m_indices) {
+        if (index) index->clear();
+    }
+}
 
 Record Table::makeRecord(RowID row) const
 {
